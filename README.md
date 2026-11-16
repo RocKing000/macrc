@@ -148,8 +148,11 @@ Compares two audit JSON files and reports regressions and improvements.
 MACRC outputs SARIF, which GitHub Code Scanning ingests natively:
 
 ```yaml
+- name: Install MACRC
+  run: npm install -g @shubh000/macrc
+
 - name: MACRC audit
-  run: npx @shubh000/macrc gate . --format sarif --out macrc.sarif || true
+  run: macrc gate . --format sarif --out macrc.sarif || true
 
 - name: Upload MACRC results
   uses: github/codeql-action/upload-sarif@v3
