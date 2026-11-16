@@ -1,10 +1,10 @@
 /**
- * Unit tests for cli/lib/ast-verifier.mjs
- * Run: node --test tests/ast-verifier.test.mjs
+ * Unit tests for cli/lib/context-verifier.mjs
+ * Run: node --test tests/context-verifier.test.mjs
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verifyMatch } from '../cli/lib/ast-verifier.mjs';
+import { verifyMatch } from '../cli/lib/context-verifier.mjs';
 
 // ── zod_usage ─────────────────────────────────────────────────────────────────
 

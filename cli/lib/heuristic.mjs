@@ -10,7 +10,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { execSync } from 'child_process';
-import { grepSourcesVerified } from './ast-verifier.mjs';
+import { grepSourcesVerified } from './context-verifier.mjs';
 
 export const PENDING_DIM = { state: 'pending',  severity: null, notes: '', snippets: [] };
 export const ABSENT_DIM  = { state: 'absent',   severity: null, notes: '', snippets: [] };

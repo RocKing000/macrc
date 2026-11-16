@@ -1,11 +1,11 @@
 /**
  * Contextual verification for HIGH-FP grep patterns.
  *
- * "AST" here means context-window analysis: for each regex match we look at
- * ±N surrounding lines to determine whether the hit is at a real call site
- * rather than in a schema definition, test fixture, comment, or README.
+ * For each regex match, reads ±N surrounding lines to determine whether the
+ * hit is at a real call site rather than a schema definition, test fixture,
+ * comment, or README. Rule-based string checks on the context window.
  *
- * This closes the wiring gap without requiring native Tree-sitter bindings.
+ * Not an AST parser: no tree-sitter or Babel. Fast and dependency-free.
  *
  * Exports:
  *   HIGH_FP_KEYS        set of pattern keys that need verification

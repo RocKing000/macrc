@@ -162,7 +162,7 @@ Full inputs: `directory`, `format`, `policy-dir`, `stack-category`, `llm`, `sari
 
 **Step 1: Heuristic pass (all 20 dims, deterministic)**
 
-Three signal extractors run per repo. For the 10 patterns with high false-positive risk (e.g. `zod_usage`, `bearer_auth`, `health_route`), hits are verified with a context-window analysis: ±10 surrounding lines must confirm the signal is at an actual call site, not a schema definition, test fixture, or comment.
+Three signal extractors run per repo. For 10 patterns with high false-positive risk (e.g. `zod_usage`, `bearer_auth`, `health_route`), hits go through a context-window pass: ±10 surrounding lines are checked with rule-based string analysis to confirm the signal is at a real call site, not a schema definition, test fixture, or comment. This is not an AST parser — no tree-sitter or Babel bindings. It is a fast, dependency-free signal verifier (`context-verifier.mjs`).
 
 | Extractor | What it checks |
 |---|---|
@@ -172,11 +172,13 @@ Three signal extractors run per repo. For the 10 patterns with high false-positi
 
 **Step 2: Targeted LLM pass (Tier-1 dims only, `--llm` flag)**
 
-8 dimensions have ≥25pp divergence between heuristic and LLM scores on the 231-repo calibration corpus. For these, a structured prompt is sent to `claude-haiku-4-5` with the actual route/controller code as context, only when the heuristic says `partial` or `present`.
+5 dimensions have ≥20pp divergence between heuristic and LLM scores on the 231-repo calibration corpus. For these, a structured prompt is sent to `claude-haiku-4-5` with the actual route/controller code as context, only when the heuristic says `partial` or `present`.
 
 **Step 3: Patch generation (`fix` subcommand)**
 
-For each absent/partial Tier-1 dim, a language-aware patch builder finds the right insertion anchor and generates a minimal, syntactically safe patch: injecting middleware factories after the last import block, adding timeout config to HTTP client instances, replacing hardcoded `localhost` URLs with env var expressions, wiring a Redis session store.
+For each absent/partial Tier-1 dim, a language-aware patch builder generates a minimal scaffolding patch: injecting middleware stubs after the last import block, adding timeout config to HTTP client calls, replacing hardcoded `localhost` URLs with env var expressions, wiring a Redis session store.
+
+**Scope note:** patches target straightforward Express/FastAPI apps. They are starter scaffolding, not universal codemods — complex TypeScript generics, custom axios wrappers, or monorepo structures will need manual adjustment after apply.
 
 ---
 
@@ -236,7 +238,7 @@ Default: all dims warn on absent, pass on partial or present.
 ## Tests
 
 ```bash
-node --test tests/ast-verifier.test.mjs tests/remediator.test.mjs
+node --test tests/context-verifier.test.mjs tests/remediator.test.mjs
 # 24 tests, 0 failures
 ```
 
