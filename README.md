@@ -191,13 +191,17 @@ Three signal extractors run per repo. For 10 patterns with high false-positive r
 
 **Step 2: Targeted LLM pass (Tier-1 dims only, `--llm` flag)**
 
-5 dimensions have ≥20pp divergence between heuristic and LLM scores on the 231-repo calibration corpus. For these, a structured prompt is sent to `claude-haiku-4-5` with the actual route/controller code as context, only when the heuristic says `partial` or `present`.
+5 dimensions have ≥20pp divergence between heuristic and LLM scores on the 232-repo corpus (231 used in LLM calibration — 1 quarantined during ingest). For these, a structured prompt is sent to `claude-haiku-4-5` with the actual route/controller code as context, only when the heuristic says `partial` or `present`.
+
+**Why verify `partial/present`, not `absent`?** The Tier-1 gap is a *false-negative* gap: the heuristic says a repo has `auth` or `input_validation` (partial or present) when the LLM finds it actually doesn't. The heuristic almost never calls a truly present dim absent — it errs on the side of optimism. So the false negatives sit entirely in the `partial/present` bucket. Sending the LLM only those repos cuts the verification cost by ~70% (roughly 30% of repos per Tier-1 dim have partial/present) while catching the cases that matter. Verifying `absent` repos would add cost with zero TPR gain.
 
 **Step 3: Patch generation (`fix` subcommand)**
 
 For each absent/partial Tier-1 dim, a language-aware patch builder generates a minimal scaffolding patch: injecting middleware stubs after the last import block, adding timeout config to HTTP client calls, replacing hardcoded `localhost` URLs with env var expressions, wiring a Redis session store.
 
 **Scope note:** patches target straightforward Express/FastAPI apps. They are starter scaffolding, not universal codemods — complex TypeScript generics, custom axios wrappers, or monorepo structures will need manual adjustment after apply.
+
+**AST query roadmap:** Current acorn queries cover JS/TS only. Python equivalent via `python3 -m ast` subprocess (stdlib, no install) is the planned next addition — relevant for the AI/ML backend ecosystem where most AI-native services are FastAPI or Flask.
 
 ---
 
@@ -221,7 +225,7 @@ Gap = LLM absent% minus verified heuristic absent%. Tier-1 (≥20pp gap) means t
 
 Contextual verification closes large parts of the gap for health_checks (+56pp raw vs +3pp verified) and load_balancing_awareness (+55pp raw vs +2pp verified), confirming the verifier is doing real work. The remaining Tier-1 gaps reflect structural limits of static analysis.
 
-The full calibration corpus (231 public AI-native repos across 8 stack categories) is documented at the [MACRC Corpus dashboard](https://trinetra.life).
+The full calibration corpus (232 public AI-native repos across 8 stack categories, 231 in the LLM calibration subset) is documented at the [MACRC Corpus dashboard](https://trinetra.life).
 
 ---
 
