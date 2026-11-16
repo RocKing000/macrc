@@ -184,20 +184,21 @@ For each absent/partial Tier-1 dim, a language-aware patch builder finds the rig
 
 Running both the heuristic and LLM auditor on the same 231 repos reveals which dimensions the heuristic systematically underestimates:
 
-| Dimension | LLM absent% | Heuristic absent% | Gap | Tier |
-|---|---|---|---|---|
-| input_validation | 93% | 49% | +44pp | **1** |
-| distributed_assumptions | 88% | 54% | +34pp | **1** |
-| timeout_handling | 85% | 52% | +33pp | **1** |
-| health_checks | 82% | 58% | +24pp | **1** |
-| statelessness | 81% | 46% | +35pp | **1** |
-| load_balancing_awareness | 79% | 50% | +29pp | **1** |
-| auth | 76% | 38% | +38pp | **1** |
-| retry_logic | 74% | 44% | +30pp | **1** |
-| error_handling | 54% | 41% | +13pp | 2 |
-| logging | 48% | 38% | +10pp | 2 |
+| Dimension | LLM absent% | Heuristic (raw)% | Heuristic (verified)% | Gap (verified) | Tier |
+|---|---|---|---|---|---|
+| input_validation | 100% | 29% | 45% | +55pp | **1** |
+| distributed_assumptions | 85% | 13% | 33% | +52pp | **1** |
+| auth | 100% | 51% | 54% | +46pp | **1** |
+| statelessness | 36% | 1% | 1% | +35pp | **1** |
+| timeout_handling | 70% | 35% | 50% | +20pp | **1** |
+| retry_logic | 92% | 66% | 80% | +12pp | 2 |
+| logging | 53% | 35% | 35% | +18pp | 2 |
+| health_checks | 89% | 33% | 86% | +3pp | 2 |
+| load_balancing_awareness | 90% | 35% | 88% | +2pp | 2 |
 
-Tier-1 dimensions (≥25pp gap) require LLM verification to avoid large false-negative rates. Tier-2 dimensions are heuristic-sufficient.
+Gap = LLM absent% minus verified heuristic absent%. Tier-1 (≥20pp gap) means the heuristic alone misses too many real absences to be reliable. Columns use verified mode (default). Raw mode is shown for reference.
+
+Contextual verification closes large parts of the gap for health_checks (+56pp raw vs +3pp verified) and load_balancing_awareness (+55pp raw vs +2pp verified), confirming the verifier is doing real work. The remaining Tier-1 gaps reflect structural limits of static analysis.
 
 The full calibration corpus (231 public AI-native repos across 8 stack categories) is documented at the [MACRC Corpus dashboard](https://trinetra.life).
 
