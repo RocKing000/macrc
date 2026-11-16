@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "Structural audit CLI for AI-generated code: 20 dimensions across Security, Reliability, Observability, and Scale Contract",
   "type": "module",
-  "bin": "cli/macrc.js",
+  "bin": {
+    "macrc": "cli/macrc.mjs"
+  },
   "files": [
     "cli/",
     "demo/",
