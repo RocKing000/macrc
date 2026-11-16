@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "repo_id": "fixture",
+  "audited_at": "2026-01-01",
+  "auditor": "macrc-heuristic",
+  "layers": {
+    "security": {
+      "auth": { "state": "absent", "severity": "high", "notes": "fixture: no auth", "snippets": [] },
+      "input_validation": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] },
+      "transport_security": { "state": "absent", "severity": null, "notes": "fixture", "snippets": [] },
+      "dependency_hygiene": { "state": "pending", "severity": null, "notes": "fixture", "snippets": [] },
+      "secrets_management": { "state": "pending", "severity": null, "notes": "fixture", "snippets": [] }
+    },
+    "reliability": {
+      "error_handling": { "state": "absent", "severity": "critical", "notes": "fixture", "snippets": [] },
+      "retry_logic": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] },
+      "circuit_breaking": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] },
+      "graceful_degradation": { "state": "absent", "severity": "medium", "notes": "fixture", "snippets": [] },
+      "timeout_handling": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] }
+    },
+    "observability": {
+      "logging": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] },
+      "metrics_emission": { "state": "absent", "severity": "medium", "notes": "fixture", "snippets": [] },
+      "tracing": { "state": "absent", "severity": "medium", "notes": "fixture", "snippets": [] },
+      "alerting": { "state": "absent", "severity": "medium", "notes": "fixture", "snippets": [] },
+      "health_checks": { "state": "absent", "severity": "medium", "notes": "fixture", "snippets": [] }
+    },
+    "scale_contract": {
+      "statelessness": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] },
+      "load_balancing_awareness": { "state": "absent", "severity": "medium", "notes": "fixture", "snippets": [] },
+      "distributed_assumptions": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] },
+      "rate_limiting": { "state": "absent", "severity": "high", "notes": "fixture", "snippets": [] },
+      "caching_strategy": { "state": "absent", "severity": "low", "notes": "fixture", "snippets": [] }
+    }
+  }
+}

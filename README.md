@@ -143,6 +143,25 @@ Compares two audit JSON files and reports regressions and improvements.
 
 ---
 
+## GitHub Code Scanning
+
+MACRC outputs SARIF, which GitHub Code Scanning ingests natively:
+
+```yaml
+- name: MACRC audit
+  run: npx @shubh000/macrc gate . --format sarif --out macrc.sarif || true
+
+- name: Upload MACRC results
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: macrc.sarif
+    category: macrc
+```
+
+Results appear in the **Security → Code scanning** tab. Use `|| true` if you want findings without blocking the workflow, or drop it to block on absent Tier-1 dims.
+
+---
+
 ## GitHub Action
 
 ```yaml

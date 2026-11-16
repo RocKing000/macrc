@@ -21,8 +21,11 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run tests
-        run: node --test tests/*.test.mjs
+      - name: Run unit tests
+        run: node --test tests/context-verifier.test.mjs tests/remediator.test.mjs
+
+      - name: Run integration tests
+        run: node --test tests/integration.test.mjs
 
       - name: Smoke test CLI
         run: |
