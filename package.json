@@ -1,0 +1,41 @@
+{
+  "name": "macrc",
+  "version": "0.1.0",
+  "description": "Structural audit CLI for AI-generated code: 20 dimensions across Security, Reliability, Observability, and Scale Contract",
+  "type": "module",
+  "bin": {
+    "macrc": "./cli/macrc.mjs"
+  },
+  "files": [
+    "cli/",
+    "demo/",
+    "tests/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "keywords": [
+    "audit",
+    "ai",
+    "security",
+    "reliability",
+    "mcp",
+    "llm",
+    "static-analysis",
+    "cli"
+  ],
+  "author": "triNetra Research",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RocKing000/macrc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RocKing000/macrc/issues"
+  },
+  "homepage": "https://trinetra.life"
+}

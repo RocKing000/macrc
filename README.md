@@ -1,0 +1,246 @@
+# MACRC: Multi-layer AI Component Readiness Checklist
+
+**AI coding agents ship PRs without timeouts, circuit breakers, or input validation. By the time a human reviews it, the code is merged. MACRC catches it at the diff.**
+
+MACRC audits any codebase across 20 structural dimensions in four layers (Security, Reliability, Observability, Scale Contract) and optionally generates patches to fix what's absent.
+
+```
+$ macrc audit ./my-service
+
+MARC Audit: ./my-service  [macrc-heuristic]  2026-11-16
+──────────────────────────────────────────────────────────────────────
+
+Security
+  ✗  auth                                    no auth signals found
+  ✗  input_validation                        no validation signals found
+  ✗  transport_security                      no TLS config found
+
+Reliability
+  ✗  retry_logic                  [high]     No retry logic found
+  ✗  timeout_handling             [high]     No timeout handling found
+
+Observability
+  ✗  health_checks                [medium]   No health check endpoint found
+
+Scale Contract
+  ✗  statelessness                [high]     In-process session store, not horizontally scalable
+
+──────────────────────────────────────────────────────────────────────
+  0 present  1 partial  17 absent  0 n/a  (18 applicable)
+  ⚠  Critical severity dimension(s) present
+```
+
+---
+
+## Install
+
+```bash
+npm install -g macrc
+# or run without installing:
+npx macrc audit .
+```
+
+**Requirements:** Node.js ≥ 18
+
+---
+
+## Quick start
+
+```bash
+# 1. Audit: see what's missing
+macrc audit ./my-api
+
+# 2. Gate: block CI on policy violations (exits non-zero)
+macrc gate ./my-api
+
+# 3. Fix: preview patches
+macrc fix ./my-api --dry-run
+
+# 4. Fix: apply patches
+macrc fix ./my-api
+
+# 5. Diff: compare two audit snapshots
+macrc diff before.json after.json
+```
+
+---
+
+## Demo
+
+The `demo/bad-express-app/` directory is an intentionally under-hardened Express app. Run it to see the full pipeline:
+
+```bash
+# Audit: 17 of 18 dims absent
+macrc audit demo/bad-express-app --no-color
+
+# Fix dry-run: 9 patches across 7 Tier-1 dims
+macrc fix demo/bad-express-app --dry-run --no-color
+```
+
+**Fix output:**
+```
+MARC Remediator patches
+──────────────────────────────────────────────────
+✓  auth             → src/routes/users.js  (would-apply)
+   note: Wire it: router.use(requireAuth) on protected route groups
+✓  input_validation → src/routes/users.js  (would-apply)
+   note: Add validateBody(YourSchema) as middleware before each POST/PUT/PATCH handler
+✓  retry_logic      → package.json         (would-apply)
+✓  retry_logic      → src/services/api.js  (would-apply)
+✓  timeout_handling → src/services/api.js  (would-apply)
+   note: Replace axios.get/post/... with http.get/post/... in api.js
+✓  health_checks    → src/index.js         (would-apply)
+✓  statelessness    → src/index.js         (would-apply)
+   note: npm install connect-redis ioredis, then apply this patch
+✓  statelessness    → src/index.js         (would-apply)
+✓  load_balancing   → src/index.js         (would-apply)
+──────────────────────────────────────────────────
+  9 applied  0 manual  0 skipped  0 errors
+```
+
+---
+
+## Subcommands
+
+### `macrc audit <dir>`
+
+Runs the full heuristic scan plus optional targeted LLM verification on Tier-1 dimensions.
+
+```bash
+macrc audit ./my-api
+macrc audit ./my-api --format json > audit.json
+macrc audit ./my-api --llm                        # targeted LLM on Tier-1 dims (needs ANTHROPIC_API_KEY)
+macrc audit ./my-api --stack-category mcp-server  # explicit stack override
+macrc audit ./my-api --no-verify                  # skip contextual grep (use raw regex counts)
+```
+
+### `macrc gate <dir>`
+
+Like `audit` but exits non-zero if policy blocks. Use in CI to prevent merging absent Tier-1 dims.
+
+```bash
+macrc gate ./my-api --format sarif --out results.sarif
+```
+
+### `macrc fix <dir>`
+
+Generates and applies deterministic patches for absent/partial Tier-1 dimensions. Language-aware (TypeScript, JavaScript, Python).
+
+```bash
+macrc fix ./my-api --dry-run                        # preview only
+macrc fix ./my-api --dims timeout_handling,auth     # patch specific dims
+macrc fix ./my-api --from audit.json                # skip re-scan, use saved audit
+```
+
+### `macrc diff <before.json> <after.json>`
+
+Compares two audit JSON files and reports regressions and improvements.
+
+```
+↑ IMPROVED  reliability.retry_logic  absent → present
+↓ REGRESSED security.auth  present → absent
+```
+
+---
+
+## GitHub Action
+
+```yaml
+- name: MACRC gate
+  uses: trinetra/macrc@v1
+  with:
+    directory: .
+    fail-on-block: true
+    llm: false          # set true + ANTHROPIC_API_KEY for Tier-1 LLM verification
+```
+
+Full inputs: `directory`, `format`, `policy-dir`, `stack-category`, `llm`, `sarif-upload`, `fail-on-block`.
+
+---
+
+## How it works
+
+**Step 1: Heuristic pass (all 20 dims, deterministic)**
+
+Three signal extractors run per repo. For the 10 patterns with high false-positive risk (e.g. `zod_usage`, `bearer_auth`, `health_route`), hits are verified with a context-window analysis: ±10 surrounding lines must confirm the signal is at an actual call site, not a schema definition, test fixture, or comment.
+
+| Extractor | What it checks |
+|---|---|
+| `parseDeps` | 5 package-manager manifest formats |
+| `grepSources` | 32 regex patterns across ≤400 source files |
+| `scanConfigs` | 12 infra config file types (k8s, docker-compose, Dockerfile, nginx…) |
+
+**Step 2: Targeted LLM pass (Tier-1 dims only, `--llm` flag)**
+
+8 dimensions have ≥25pp divergence between heuristic and LLM scores on the 231-repo calibration corpus. For these, a structured prompt is sent to `claude-haiku-4-5` with the actual route/controller code as context, only when the heuristic says `partial` or `present`.
+
+**Step 3: Patch generation (`fix` subcommand)**
+
+For each absent/partial Tier-1 dim, a language-aware patch builder finds the right insertion anchor and generates a minimal, syntactically safe patch: injecting middleware factories after the last import block, adding timeout config to HTTP client instances, replacing hardcoded `localhost` URLs with env var expressions, wiring a Redis session store.
+
+---
+
+## Divergence map: why Tier-1 matters
+
+Running both the heuristic and LLM auditor on the same 231 repos reveals which dimensions the heuristic systematically underestimates:
+
+| Dimension | LLM absent% | Heuristic absent% | Gap | Tier |
+|---|---|---|---|---|
+| input_validation | 93% | 49% | +44pp | **1** |
+| distributed_assumptions | 88% | 54% | +34pp | **1** |
+| timeout_handling | 85% | 52% | +33pp | **1** |
+| health_checks | 82% | 58% | +24pp | **1** |
+| statelessness | 81% | 46% | +35pp | **1** |
+| load_balancing_awareness | 79% | 50% | +29pp | **1** |
+| auth | 76% | 38% | +38pp | **1** |
+| retry_logic | 74% | 44% | +30pp | **1** |
+| error_handling | 54% | 41% | +13pp | 2 |
+| logging | 48% | 38% | +10pp | 2 |
+
+Tier-1 dimensions (≥25pp gap) require LLM verification to avoid large false-negative rates. Tier-2 dimensions are heuristic-sufficient.
+
+The full calibration corpus (231 public AI-native repos across 8 stack categories) is documented at the [MACRC Corpus dashboard](https://trinetra.life).
+
+---
+
+## Stack categories and N/A classification
+
+| Category | N/A dims | Count |
+|---|---|---|
+| `plugin-extension` | 8 (all network dims) | 25 repos |
+| `skills-config` | 8 (all network dims) | 25 repos |
+| `desktop-native` | 8 (all network dims) | 24 repos |
+| `cli-tool` | 7 (network dims except distributed_assumptions) | 24 repos |
+
+Dims classified N/A are excluded from the heuristic denominator. LLM mode scores all dims without N/A.
+
+---
+
+## Policy
+
+Place a `.macrc.yml` in your repo root to customise gate behaviour:
+
+```yaml
+policy:
+  security.auth: block        # fail gate if absent
+  security.input_validation: block
+  reliability.timeout_handling: warn
+  observability.health_checks: warn
+```
+
+Default: all dims warn on absent, pass on partial or present.
+
+---
+
+## Tests
+
+```bash
+node --test tests/ast-verifier.test.mjs tests/remediator.test.mjs
+# 24 tests, 0 failures
+```
+
+---
+
+## License
+
+MIT
