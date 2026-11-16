@@ -11,6 +11,7 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { execSync } from 'child_process';
 import { grepSourcesVerified } from './context-verifier.mjs';
+import { queryTimeoutHandling, queryDistributedAssumptions } from './syntax-queries.mjs';
 
 export const PENDING_DIM = { state: 'pending',  severity: null, notes: '', snippets: [] };
 export const ABSENT_DIM  = { state: 'absent',   severity: null, notes: '', snippets: [] };
@@ -383,6 +384,8 @@ export function computeHeuristicSummary(layers) {
  * stackCategory: one of ai-web-app, api-proxy, mcp-server, agent-framework,
  *               cli-tool, desktop-native, plugin-extension, skills-config, or ''
  */
+const JS_TS_RE = /\.(js|ts|mjs|cjs|jsx|tsx)$/;
+
 export function runHeuristic(cloneDir, stackCategory = '', { verified = true } = {}) {
   const deps    = parseDeps(cloneDir);
   // verified=true uses context-window analysis for HIGH-FP patterns,
@@ -391,5 +394,47 @@ export function runHeuristic(cloneDir, stackCategory = '', { verified = true } =
     ? grepSourcesVerified(cloneDir, GREP_PATTERNS)
     : grepSources(cloneDir);
   const configs = scanConfigs(cloneDir);
-  return heuristicScore(deps, hits, configs, stackCategory);
+  const layers  = heuristicScore(deps, hits, configs, stackCategory);
+
+  // AST refinement: run acorn syntax queries on JS/TS files for the two
+  // dimensions with the largest verified-heuristic gap (+52pp / +20pp).
+  // Only runs when verified=true; replaces the grep result when non-null.
+  if (verified) {
+    let sourceFiles = [];
+    try {
+      sourceFiles = execSync('git ls-files', { cwd: cloneDir, timeout: 10000 })
+        .toString().split('\n')
+        .filter(f => f && JS_TS_RE.test(f))
+        .map(f => resolve(cloneDir, f));
+    } catch {}
+
+    // timeout_handling — merge per-file AST results
+    const timeoutResults = sourceFiles.map(f => queryTimeoutHandling(f)).filter(Boolean);
+    if (timeoutResults.length > 0) {
+      const totalCalls   = timeoutResults.reduce((s, r) => s + r.callsFound, 0);
+      const timedOutCalls = timeoutResults.reduce((s, r) => s + r.callsWithTimeout, 0);
+      if (timedOutCalls === 0) {
+        layers.reliability.timeout_handling = { state: 'absent',  severity: 'high',   notes: `AST: ${totalCalls} HTTP call(s) with no timeout config`, snippets: [] };
+      } else if (timedOutCalls < totalCalls) {
+        layers.reliability.timeout_handling = { state: 'partial', severity: 'high',   notes: `AST: ${timedOutCalls}/${totalCalls} HTTP calls have timeout config`, snippets: [] };
+      } else {
+        layers.reliability.timeout_handling = { state: 'present', severity: null,     notes: `AST: all ${totalCalls} HTTP call(s) have timeout config`, snippets: [] };
+      }
+    }
+
+    // distributed_assumptions — absent if any file has hardcoded localhost in a call arg
+    if (!isNA(stackCategory, 'distributed_assumptions')) {
+      const distResults = sourceFiles.map(f => queryDistributedAssumptions(f)).filter(Boolean);
+      if (distResults.length > 0) {
+        const urls = distResults.flatMap(r => r.hardcodedUrls);
+        layers.scale_contract.distributed_assumptions = {
+          state: 'absent', severity: 'high',
+          notes: `AST: hardcoded localhost URL(s) in call arguments: ${[...new Set(urls)].slice(0, 3).join(', ')}`,
+          snippets: [],
+        };
+      }
+    }
+  }
+
+  return layers;
 }

@@ -257,8 +257,15 @@ Default: all dims warn on absent, pass on partial or present.
 ## Tests
 
 ```bash
-node --test tests/context-verifier.test.mjs tests/remediator.test.mjs
-# 24 tests, 0 failures
+# Unit tests (fast, no network)
+node --test tests/context-verifier.test.mjs tests/remediator.test.mjs tests/syntax-queries.test.mjs
+
+# Integration tests (runs full pipeline on demo/bad-express-app)
+node --test tests/integration.test.mjs
+
+# All at once
+node --test tests/*.test.mjs
+# 43 tests, 0 failures
 ```
 
 ---
