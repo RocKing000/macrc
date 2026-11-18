@@ -1,6 +1,6 @@
 {
   "name": "@shubh000/macrc",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Structural audit CLI for AI-generated code: 20 dimensions across Security, Reliability, Observability, and Scale Contract",
   "type": "module",
   "bin": {
