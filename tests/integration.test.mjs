@@ -66,6 +66,23 @@ test('buildPatches produces ≥7 patches on bad-express-app audit', () => {
   assert.ok(patches.length >= 7, `expected ≥7 patches, got ${patches.length}: ${patches.map(p => p._dim).join(', ')}`);
 });
 
+// ── Single-process app: tracing N/A ───────────────────────────────────────────
+// A codebase with no HTTP client deps (axios, node-fetch, etc.) is single-process.
+// tracing must be n_a, not absent or present — no inter-service calls to trace.
+
+const SINGLE_PROCESS = resolve(__dir, 'fixtures/single-process-app');
+const singleProcResult = runHeuristic(SINGLE_PROCESS, 'api-service', { verified: true });
+
+test('observability.tracing is n_a when no HTTP client deps', () => {
+  const state = singleProcResult.observability?.tracing?.state;
+  assert.equal(state, 'n_a', `expected n_a, got "${state}"`);
+});
+
+test('observability.tracing n_a note mentions single-process', () => {
+  const notes = singleProcResult.observability?.tracing?.notes ?? '';
+  assert.ok(notes.includes('single-process'), `expected note to mention single-process, got: "${notes}"`);
+});
+
 // ── Diff regression test ───────────────────────────────────────────────────────
 
 test('diff detects auth absent→present as IMPROVED', () => {

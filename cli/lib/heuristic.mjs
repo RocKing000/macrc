@@ -284,6 +284,13 @@ export function heuristicScore(deps, hits, configs, stackCategory) {
       return h('absent', 'medium', 'No metrics emission found');
     }),
     tracing: naOr('tracing', () => {
+      // No outbound HTTP client = single-process app; tracing is structurally N/A
+      const httpClientPkgs = ['axios','node-fetch','got','undici','superagent','ky',
+                              'requests','httpx','aiohttp','urllib3',
+                              '@grpc/grpc-js','grpcio','grpc'];
+      if (!hasDep(...httpClientPkgs)) {
+        return { ...NA_DIM, notes: 'No outbound HTTP/RPC client found — single-process, tracing N/A' };
+      }
       if (hasDep(...tracingPkgs) && (hits.otel_span || 0) > 0) return h('present', null, 'Tracing library with span creation found');
       if (hasDep(...tracingPkgs)) return h('partial', 'medium', 'Tracing library in deps but no spans found');
       return h('absent', 'medium', 'No distributed tracing found');

@@ -1,0 +1,8 @@
+{
+  "name": "single-process-fixture",
+  "version": "1.0.0",
+  "description": "Fixture: no outbound HTTP client deps",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
