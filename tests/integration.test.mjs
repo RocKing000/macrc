@@ -11,18 +11,20 @@ const DEMO  = resolve(__dir, '../demo/bad-express-app');
 
 // ── Absent-dim assertions ──────────────────────────────────────────────────────
 // bad-express-app:
-//   no auth packages/patterns              → secEnhancement.auth       absent
-//   no validation packages/patterns        → secEnhancement.input_validation absent
-//   no retry packages/patterns             → reliability.retry_logic   absent
-//   no timeout patterns                    → reliability.timeout_handling absent
-//   no health route                        → observability.health_checks absent
-//   express-session, no redis              → scale_contract.statelessness absent
+//   no auth packages/patterns              → secEnhancement.auth             absent
+//   no validation packages/patterns        → secEnhancement.input_validation  absent
+//   express.json() with no limit           → secEnhancement.payload_size_gate absent
+//   no retry packages/patterns             → reliability.retry_logic          absent
+//   no timeout patterns                    → reliability.timeout_handling      absent
+//   no health route                        → observability.health_checks       absent
+//   express-session, no redis              → scale_contract.statelessness      absent
 //   localhost URLs in api.js               → scale_contract.distributed_assumptions absent
-//   no rate-limit packages                 → scale_contract.rate_limiting absent
+//   no rate-limit packages                 → scale_contract.rate_limiting      absent
 
 const ABSENT = [
   ['secEnhancement', 'auth'],
   ['secEnhancement', 'input_validation'],
+  ['secEnhancement', 'payload_size_gate'],
   ['reliability',    'retry_logic'],
   ['reliability',    'timeout_handling'],
   ['observability',  'health_checks'],
@@ -81,6 +83,30 @@ test('observability.tracing is n_a when no HTTP client deps', () => {
 test('observability.tracing n_a note mentions single-process', () => {
   const notes = singleProcResult.observability?.tracing?.notes ?? '';
   assert.ok(notes.includes('single-process'), `expected note to mention single-process, got: "${notes}"`);
+});
+
+// ── Serverless/edge-specific dim assertions ────────────────────────────────────
+// serverless-edge-app:
+//   let cache = null at module scope, no Redis        → scale_contract.isolate_cache_scope  absent
+//   3 sequential DB awaits with Promise.all also used → reliability.sequential_db_calls     partial
+//   Promise.all with .map over DB calls               → scale_contract.query_fan_out        partial
+
+const EDGE = resolve(__dir, 'fixtures/serverless-edge-app');
+const edgeResult = runHeuristic(EDGE, 'mcp-server', { verified: true });
+
+test('scale_contract.isolate_cache_scope is absent in serverless-edge-app', () => {
+  const state = edgeResult.scale_contract?.isolate_cache_scope?.state;
+  assert.equal(state, 'absent', `expected absent, got "${state}"`);
+});
+
+test('reliability.sequential_db_calls is partial in serverless-edge-app', () => {
+  const state = edgeResult.reliability?.sequential_db_calls?.state;
+  assert.equal(state, 'partial', `expected partial, got "${state}"`);
+});
+
+test('scale_contract.query_fan_out is partial in serverless-edge-app', () => {
+  const state = edgeResult.scale_contract?.query_fan_out?.state;
+  assert.equal(state, 'partial', `expected partial, got "${state}"`);
 });
 
 // ── Diff regression test ───────────────────────────────────────────────────────

@@ -19,10 +19,10 @@ export const NA_DIM      = { state: 'n_a',      severity: null, notes: 'not appl
 
 // ── N/A table ─────────────────────────────────────────────────────────────────
 export const NA_BY_CATEGORY = {
-  'plugin-extension': new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness','distributed_assumptions']),
-  'skills-config':    new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness','distributed_assumptions']),
-  'desktop-native':   new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness','distributed_assumptions']),
-  'cli-tool':         new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness']),
+  'plugin-extension': new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness','distributed_assumptions','payload_size_gate','query_fan_out','isolate_cache_scope','sequential_db_calls']),
+  'skills-config':    new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness','distributed_assumptions','payload_size_gate','query_fan_out','isolate_cache_scope','sequential_db_calls']),
+  'desktop-native':   new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness','distributed_assumptions','payload_size_gate','query_fan_out','isolate_cache_scope','sequential_db_calls']),
+  'cli-tool':         new Set(['circuit_breaking','health_checks','metrics_emission','tracing','alerting','statelessness','load_balancing_awareness','payload_size_gate','query_fan_out','isolate_cache_scope','sequential_db_calls']),
 };
 
 export function isNA(stackCategory, dim) {
@@ -80,6 +80,12 @@ export const GREP_PATTERNS = {
 
   bearer_auth:         /\bBearer\s+\S|\bAuthorization.*Bearer/gi,
   verify_token:        /\bverifyToken\b|\brequireAuth\b|\bisAuthenticated\b|\b@login_required\b|\bDepends\s*\(\s*get_current_user/g,
+
+  body_size_limit:     /express\.json\s*\(\s*\{[^}]*limit|MAX_CONTENT_LENGTH\s*=|max_body_size\b|maxBodySize\b|req\.headers\[['"`]content-length['"`]\]|\.byteLength\s*>\s*\d/gi,
+  promise_all_map:     /Promise\.all\s*\(\s*\w[\w.]*\.map\s*\(/g,
+  module_cache_null:   /\blet\s+(?:cache|memo|_cache|_memo)\s*=\s*null\b/g,
+  await_db_call:       /\bawait\b[^;\n]{0,100}(?:\.from\s*\(|\.query\s*\(|\.findOne\s*\(|\.find\s*\(|\.execute\s*\()/g,
+  promise_all:         /\bPromise\.all\s*\(/g,
 
   zod_usage:           /\bz\.(string|number|object|array|boolean|enum)\s*\(|\b\.parse\s*\(|\b\.safeParse\s*\(/g,
   joi_usage:           /\bJoi\.(object|string|number|array)\s*\(|\b\.validate\s*\({/g,
@@ -227,6 +233,14 @@ export function heuristicScore(deps, hits, configs, stackCategory) {
     secEnhancement.transport_security = h('partial', null, 'Platform TLS config found (fly.toml/vercel.json/netlify.toml)');
   }
 
+  if (!isNA(stackCategory, 'payload_size_gate')) {
+    if ((hits.body_size_limit || 0) > 0) {
+      secEnhancement.payload_size_gate = h('present', null, 'Body size limit or content-length guard found');
+    } else {
+      secEnhancement.payload_size_gate = h('absent', 'medium', 'No body size limit before deserialization; oversized payloads are unguarded');
+    }
+  }
+
   // ── Reliability ───────────────────────────────────────────────────────────
   const totalErrHits = (hits.try_catch || 0) + (hits.dot_catch || 0) + (hits.on_error || 0) +
                        (hits.py_except || 0) + (hits.go_err_nil || 0) + (hits.rust_result || 0);
@@ -262,6 +276,14 @@ export function heuristicScore(deps, hits, configs, stackCategory) {
       if (timeoutHits === 1) return h('partial', 'high', 'Timeout found in 1 place, not systematic');
       return h('absent', 'high', 'No timeout handling found');
     })(),
+    sequential_db_calls: naOr('sequential_db_calls', () => {
+      const dbCalls    = hits.await_db_call || 0;
+      const hasAllMap  = (hits.promise_all_map || 0) + (hits.promise_all || 0);
+      if (dbCalls === 0) return { ...NA_DIM, notes: 'No DB await calls detected' };
+      if (dbCalls >= 3 && hasAllMap === 0) return h('absent', 'medium', `${dbCalls} sequential DB awaits with no Promise.all coalescing found`);
+      if (dbCalls >= 3 && hasAllMap > 0)  return h('partial', 'low',    `${dbCalls} DB awaits with some Promise.all usage; verify hot-path calls are parallel`);
+      return h('present', null, 'DB call count is low or Promise.all coalescing is present');
+    }),
   };
 
   // ── Observability ─────────────────────────────────────────────────────────
@@ -353,6 +375,21 @@ export function heuristicScore(deps, hits, configs, stackCategory) {
       if (cacheHits > 0) return h('partial', 'low', 'Cache operations or HTTP cache headers found');
       return h('absent', 'low', 'No caching strategy found');
     })(),
+    query_fan_out: naOr('query_fan_out', () => {
+      const fanOut = hits.promise_all_map || 0;
+      const dbCalls = hits.await_db_call || 0;
+      if (fanOut === 0 && dbCalls === 0) return { ...NA_DIM, notes: 'No DB calls detected' };
+      if (fanOut > 0 && dbCalls === 0)   return h('present', null, 'Promise.all fan-out with no sequential DB calls found');
+      if (fanOut > 0)                    return h('partial', 'low',    `Promise.all fan-out present but ${dbCalls} DB await(s) also found; verify none fan out proportionally to a list`);
+      return h('absent', 'medium', `${dbCalls} DB await(s) with no Promise.all fan-out; N-query expansion is likely if any loop iterates over a dynamic list`);
+    }),
+    isolate_cache_scope: naOr('isolate_cache_scope', () => {
+      const moduleCacheVars = hits.module_cache_null || 0;
+      const hasDistributed  = hasDep(...redisPkgs) && (hits.cache_ops || 0) > 0;
+      if (moduleCacheVars === 0) return h('present', null, 'No module-level cache variables detected');
+      if (hasDistributed)        return h('partial', 'low',    `${moduleCacheVars} module-level cache var(s) found but distributed cache also present; verify hot data is not isolate-scoped only`);
+      return h('absent', 'medium', `${moduleCacheVars} module-level cache var(s) reset on every cold start; under concurrent cold starts each isolate hits the upstream independently`);
+    }),
   };
 
   return { secEnhancement, reliability, observability, scale_contract };
@@ -375,7 +412,7 @@ export function computeHeuristicSummary(layers) {
 
   const applicable = absent + partial + present;
   return {
-    total_dimensions: 20,
+    total_dimensions: 24,
     applicable_dimensions: applicable,
     na_count,
     absent_count: absent,

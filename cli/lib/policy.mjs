@@ -66,10 +66,10 @@ export function applyPolicy(policy, auditLayers) {
   let warnCount  = 0;
 
   const ALL_DIMS = {
-    security:       ['auth','input_validation','transport_security','dependency_hygiene','secrets_management'],
-    reliability:    ['error_handling','retry_logic','circuit_breaking','graceful_degradation','timeout_handling'],
+    security:       ['auth','input_validation','transport_security','dependency_hygiene','secrets_management','payload_size_gate'],
+    reliability:    ['error_handling','retry_logic','circuit_breaking','graceful_degradation','timeout_handling','sequential_db_calls'],
     observability:  ['logging','metrics_emission','tracing','alerting','health_checks'],
-    scale_contract: ['statelessness','load_balancing_awareness','distributed_assumptions','rate_limiting','caching_strategy'],
+    scale_contract: ['statelessness','load_balancing_awareness','distributed_assumptions','rate_limiting','caching_strategy','query_fan_out','isolate_cache_scope'],
   };
 
   for (const [layer, dims] of Object.entries(ALL_DIMS)) {
